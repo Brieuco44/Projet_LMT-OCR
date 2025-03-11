@@ -7,17 +7,16 @@ class recognition_service:
         self.tesseract_cmd = tesseract_cmd
         self.dpi = dpi
         self.pages = convert_from_path(pdf_path, dpi=dpi)
-        self.current_page = self.pages[0]
         self.temp_image_path = "temp_page.png"
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
 
-    def extract_text_from_box(self, box):
+    def extract_text_from_box(self, box, page):
         """Extrait le text contenu aux coordonnées"""
-        cropped = self.current_page.crop(box)
+        cropped = self.pages[page-1].crop(box) # utilisation de la page moins 1
         return pytesseract.image_to_string(cropped)
 
     def process_selected_boxes(self, selected_boxes):
         """Parcours la liste des zones à extraire le texte"""
         for i, box in enumerate(selected_boxes):
-            text = self.extract_text_from_box(box)
+            text = self.extract_text_from_box(box.list_rectangle,box.page)
