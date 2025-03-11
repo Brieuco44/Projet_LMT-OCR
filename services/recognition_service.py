@@ -1,6 +1,4 @@
-import cv2
 from pdf2image import convert_from_path
-from PIL import Image, ImageDraw
 import pytesseract
 
 class recognition_service:
@@ -14,23 +12,12 @@ class recognition_service:
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
 
-    def save_temp_image(self):
-        """Save the current page as a temporary image."""
-        self.current_page.save(self.temp_image_path)
-
     def extract_text_from_box(self, box):
-        """Extract text from a specific box in the image."""
+        """Extrait le text contenu aux coordonnées"""
         cropped = self.current_page.crop(box)
         return pytesseract.image_to_string(cropped)
 
-    def ocr_with_boxes(self, keyword):
-        """Perform OCR and locate bounding boxes for a specific keyword."""
-        ocr_data = pytesseract.image_to_data(self.current_page, output_type=pytesseract.Output.DICT)
-        found_boxes = []
-
-        for i, word in enumerate(ocr_data['text']):
-            if keyword.lower() in word.lower():
-                x, y, w, h = (ocr_data['left'][i], ocr_data['top'][i],
-                              ocr_data['width'][i], ocr_data['height'][i])
-                found_boxes.append((x, y, x + w, y + h))
-        return found_boxes
+    def process_selected_boxes(self, selected_boxes):
+        """Parcours la liste des zones à extraire le texte"""
+        for i, box in enumerate(selected_boxes):
+            text = self.extract_text_from_box(box)
