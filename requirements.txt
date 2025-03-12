@@ -1,4 +1,3 @@
-numpy
 opencv-python
 packaging
 pdf2image
@@ -9,3 +8,4 @@ setuptools
 wheel
 Flask
 SQLAlchemy
+pytest
