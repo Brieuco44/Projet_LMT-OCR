@@ -18,5 +18,5 @@ class recognition_service:
 
     def process_selected_boxes(self, selected_boxes):
         """Parcours la liste des zones à extraire le texte"""
-        for i, box in enumerate(selected_boxes):
-            text = self.extract_text_from_box(box.list_rectangle,box.page)
+        for i, Champs in enumerate(selected_boxes):
+            text = self.extract_text_from_box(Champs.zone,Champs.page)
