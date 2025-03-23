@@ -21,6 +21,6 @@ class Champs(db.Model):
     zone: Mapped[ZoneDict] = mapped_column(db.JSON, nullable=False) # Coordonnées de type ZoneDict
     page: Mapped[int] # Numéro de page
 
-    db.Column("idtypechamps", db.ForeignKey(Typechamps.id)) #primary_key=True
+    type_champs_id = db.Column(db.ForeignKey(Typechamps.id)) #primary_key=True
 
-    db.Column("idtypelivrable", db.ForeignKey(Typelivrables.id))
+    type_livrable_id = db.Column(db.ForeignKey(Typelivrables.id))

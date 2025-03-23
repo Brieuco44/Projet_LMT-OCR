@@ -9,6 +9,6 @@ class Controles(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     resultat : Mapped[bool]
 
-    db.Column("iddocument", db.ForeignKey(Documents.id))  # primary_key=True
+    document_id = db.Column(db.ForeignKey(Documents.id))  # primary_key=True
 
-    db.Column("idchamps", db.ForeignKey(Champs.id))
+    champs_id = db.Column(db.ForeignKey(Champs.id))

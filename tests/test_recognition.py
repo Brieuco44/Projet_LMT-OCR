@@ -12,6 +12,7 @@ def cidentifiant_benificiaire_Ok():
     rgntn_serv = Recognition_service(
         pdf,
         6
-    )
+    ).process()
     # 82979546
+    print("Test")
     print(rgntn_serv)

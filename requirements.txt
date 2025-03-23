@@ -13,3 +13,4 @@ pytest
 python-dotenv
 flask_cors
 pymysql
+cryptography

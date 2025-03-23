@@ -11,4 +11,4 @@ class Documents(db.Model):
 
     date: Mapped[datetime]
 
-    db.Column("idtypelivrable", db.ForeignKey(Typelivrables.id))
+    type_livrable_id = db.Column(db.ForeignKey(Typelivrables.id))

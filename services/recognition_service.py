@@ -3,13 +3,12 @@ from typing import List, Dict
 from sqlalchemy.orm import Session
 from pdf2image import convert_from_path
 import pytesseract
-from app import db
 
 from models.champs import Champs
 
 
 class Recognition_service:
-    def __init__(self, pdf_path, idtypelivrable, tesseract_cmd="/usr/bin/tesseract", dpi=300):
+    def __init__(self, pdf_path, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300):
         """
         Initialisation du service de reconnaissance.
 
@@ -26,6 +25,7 @@ class Recognition_service:
         self.temp_image_path = "temp_page.png"
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
+        self.db = db
 
     def extract_text_from_box(self, box, page):
         """
@@ -56,10 +56,11 @@ class Recognition_service:
         :param champs_list: Liste d'objets Champs.
         :return: Dictionnaire {nom_du_champ: texte_extrait}.
         """
+        print(champs_list)
         results = {}
-        for champ in champs_list:
-            extracted_text = self.process_selected_boxe(champ)
-            results[champ.nom] = extracted_text
+        # for champ in champs_list:
+        #     extracted_text = self.process_selected_boxe(champ)
+        #     results[champ.nom] = extracted_text
         return results
 
     def get_champs_list(self) -> List['Champs']:
@@ -70,7 +71,7 @@ class Recognition_service:
         :param session: Session SQLAlchemy active.
         :return: Liste d'objets Champs correspondant au filtre.
         """
-        champs_list = db.query(Champs).filter_by(idtypelivrable=self.typelivrable).all()
+        champs_list = self.db.session.query(Champs).filter_by(type_livrable_id=self.typelivrable).all()
         return champs_list
 
     def process(self) -> Dict[str, str]:
