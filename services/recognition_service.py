@@ -1,6 +1,6 @@
-from tkinter.ttk import setup_master
 from typing import List, Dict
-from sqlalchemy.orm import Session
+import json
+from PIL import ImageDraw
 from pdf2image import convert_from_path
 import pytesseract
 
@@ -22,21 +22,31 @@ class Recognition_service:
         self.tesseract_cmd = tesseract_cmd
         self.dpi = dpi
         self.pages = convert_from_path(pdf_path, dpi=dpi)
-        self.temp_image_path = "temp_page.png"
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
         self.db = db
+
+    def box_to_tuples(self,box):
+        return (box['x1'], box['y1'], box['x2'], box['y2'])
 
     def extract_text_from_box(self, box, page):
         """
         Extrait le texte contenu dans les coordonnées spécifiées sur la page indiquée.
 
-        :param box: Coordonnées (x1, y1, x2, y2) de la zone à extraire.
+        :param box: Coordonnées {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048} de la zone à extraire.
         :param page: Numéro de la page (commençant à 1).
         :return: Texte extrait de la zone.
         """
         # Ajuste l'index de la page (les pages sont indexées à partir de 0)
-        cropped = self.pages[page - 1].crop(box)
+        image = self.pages[page - 1]  # Get the page image
+
+        # Convertir les coordonnées en format (left, upper, right, lower)
+        crop_box = self.box_to_tuples(box)
+
+        # Cropping the image
+        cropped = image.crop(crop_box)
+
+        # Extrait le texte de la zone découpée
         return pytesseract.image_to_string(cropped)
 
     def process_selected_boxe(self, champ):
@@ -56,11 +66,10 @@ class Recognition_service:
         :param champs_list: Liste d'objets Champs.
         :return: Dictionnaire {nom_du_champ: texte_extrait}.
         """
-        print(champs_list)
         results = {}
-        # for champ in champs_list:
-        #     extracted_text = self.process_selected_boxe(champ)
-        #     results[champ.nom] = extracted_text
+        for champ in champs_list:
+            extracted_text = self.process_selected_boxe(champ)
+            results[champ.nom] = extracted_text.replace("/", "").strip()
         return results
 
     def get_champs_list(self) -> List['Champs']:
@@ -74,10 +83,60 @@ class Recognition_service:
         champs_list = self.db.session.query(Champs).filter_by(type_livrable_id=self.typelivrable).all()
         return champs_list
 
-    def process(self) -> Dict[str, str]:
+    def process(self, jsonformat=False):
         """
-        Recupère la list des champs execute l'OCR pour retourner un dictionnaire
-        :param session:
-        :return:
+        Récupère la liste des champs, exécute l'OCR et retourne un dictionnaire ou un JSON.
+
+        :param jsonformat: Si True, renvoie le résultat en format JSON, sinon en dictionnaire.
+        :return: Dictionnaire des champs et texte extrait ou chaîne JSON.
         """
-        return self.process_champs_list(self.get_champs_list())
+        # Récupère la liste des champs et extrait le texte
+        champs_data = self.process_champs_list(self.get_champs_list())
+
+        # Si jsonformat est True, renvoie le résultat en format JSON
+        if jsonformat:
+            return json.dumps(champs_data)
+        else:
+            return champs_data
+
+    def draw_boxes_on_pdf(self, output_pdf_path="output_with_boxes.pdf"):
+        """
+        Dessine des rectangles autour des zones spécifiées pour chaque champ sur les pages du PDF
+        et sauvegarde le résultat dans un nouveau fichier PDF.
+
+        :param output_pdf_path: Chemin du PDF de sortie avec les zones encadrées.
+        """
+        # Récupère la liste des champs depuis la base de données
+        champs_list = self.get_champs_list()
+
+        # Organise les boîtes par numéro de page (les pages commencent à 1)
+        page_boxes = {}
+        for champ in champs_list:
+            # On suppose que 'champ.zone' est un tuple (x1, y1, x2, y2) et 'champ.page' est le numéro de page (commençant à 1)
+            boxes = page_boxes.setdefault(champ.page, [])
+            boxes.append(champ.zone)
+
+        # Crée une nouvelle liste d'images avec les rectangles dessinés
+        drawn_pages = []
+        for idx, page_img in enumerate(self.pages, start=1):
+            # Si la page contient des boîtes, les dessiner
+            if idx in page_boxes:
+                # Crée une copie de l'image pour ne pas altérer l'image originale
+                img_copy = page_img.copy()
+                draw = ImageDraw.Draw(img_copy)
+                for box in page_boxes[idx]:
+                    # Dessine un rectangle rouge avec une épaisseur de 2 pixels
+                    draw.rectangle(self.box_to_tuples(box), outline="red", width=2)
+                drawn_pages.append(img_copy)
+            else:
+                drawn_pages.append(page_img)
+
+        # Sauvegarde toutes les pages modifiées dans un nouveau PDF
+        if drawn_pages:
+            drawn_pages[0].save(
+                output_pdf_path,
+                "PDF",
+                resolution=self.dpi,
+                save_all=True,
+                append_images=drawn_pages[1:]
+            )
