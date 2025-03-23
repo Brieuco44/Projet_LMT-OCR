@@ -47,11 +47,9 @@ class Recognition_service:
         # Cropping the image
         cropped = image.crop(crop_box)
 
+
         # Extrait le texte de la zone découpée
         return pytesseract.image_to_string(cropped)
-
-    from PIL import Image
-    import pytesseract
 
     def extract_signature_from_box(self, box, page):
         """
@@ -103,49 +101,39 @@ class Recognition_service:
 
     def extract_date_from_box(self, box, page):
         """
-        Extrait la date manuscrite (au format 19/04/2024) d'une zone spécifiée sur une page.
+        Extrait la date manuscrite (au format 19/04/2024 ou 19/04/24) d'une zone spécifiée sur une page.
         Si la date n'est pas reconnue, retourne "unknown".
 
-        :param box: Coordonnées de la zone à analyser {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048}.
+        :param box: Coordonnées de la zone à analyser, par exemple {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048}.
         :param page: Numéro de la page à partir de 1.
         :return: Date extraite sous forme de chaîne de caractères ou "unknown" si la date n'est pas reconnue.
         """
-        # Ajuste l'index de la page (les pages sont indexées à partir de 0)
         image = self.pages[page - 1]
 
-        # Convertir les coordonnées en format (left, upper, right, lower)
+        # Recadrage de la zone d'intérêt
         crop_box = self.box_to_tuples(box)
 
-        # Découpe l'image selon la zone spécifiée
         cropped = image.crop(crop_box)
 
-        # --- Preprocessing pour améliorer la reconnaissance du manuscrit ---
-        # Convertir en niveaux de gris
-        gray = cropped.convert("L")
-        # Augmenter le contraste
-        enhancer = ImageEnhance.Contrast(gray)
-        enhanced = enhancer.enhance(2.0)
-        # Appliquer une légère mise au point (optionnel)
-        filtered = enhanced.filter(ImageFilter.SHARPEN)
-        # Appliquer un seuillage pour obtenir une image binaire
-        threshold = 128
-        binary = filtered.point(lambda p: 255 if p > threshold else 0)
+        # save the image
+        cropped.save(str(crop_box) + '.jpg')  # Save the image
 
-        # Optionnel: Sauvegarder l'image pour le debugging
-        # binary.save("debug_binary.png")
+        # Configurer pytesseract pour optimiser la reconnaissance des chiffres et des séparateurs
+        custom_config = r'--oem 3 --psm 6'
+        ocr_result = pytesseract.image_to_string(cropped, config=custom_config, lang='eng+fra')
 
-        # Extrait le texte de l'image prétraitée avec pytesseract
-        extracted_text = pytesseract.image_to_string(binary, config='--psm 6')
+        # Nettoyer le texte reconnu
+        ocr_result = ocr_result.strip()
 
-        # Définir une expression régulière pour vérifier le format de la date (ex: 19/04/2024)
-        date_pattern = r"(\d{2})/(\d{2})/(\d{4})"
+        # Expression régulière pour détecter un format de date "dd/mm/yyyy" ou "dd/mm/yy"
+        date_pattern = r'(\b\d{1,2}/\d{1,2}/(\d{2}|\d{4})\b)'
+        match = re.search(date_pattern, ocr_result)
 
-        # Utiliser re.search pour trouver la date n'importe où dans le texte extrait
-        print(extracted_text)
-        match = re.search(date_pattern, extracted_text)
         if match:
-            return match.group(0)
+            # On retourne la première occurrence trouvée
+            return match.group(1)
         else:
+            # Si aucune date n'est reconnue, on retourne "unknown"
             return "unknown"
 
     def process_selected_boxe(self, champ):

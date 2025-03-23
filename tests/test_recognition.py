@@ -6,7 +6,7 @@ path = "../data/"
 
 ca_signe_csp = path + "ca_signe_csp/"
 
-def test_ca_signe_CSP_Ok():
+def test_ca_signe_CSP_20_Ok():
     # pdf "22 CA Signé CSP"
     pdf = ca_signe_csp + "20_CA_Signé_CSP.pdf"
     # Ensure you're in the app context
@@ -17,9 +17,26 @@ def test_ca_signe_CSP_Ok():
             db
         )
         res = rgntn_serv.process(True)
+        rgntn_serv.draw_boxes_on_pdf(output_pdf_path="first.pdf")
 
     assert res["Identifiant N Beneficiaire"] == "60387042"
     assert res["Nom/prenom Consultant"] == "RIZZI Amélie"
     assert res["Adresse mail Organisme"] == "clisson@catalys-conseil.fr"
-    # This will now run inside the application context
+
+def test_ca_signe_CSP_21_Ok():
+    # pdf "22 CA Signé CSP"
+    pdf = ca_signe_csp + "21_CA_Signé_CSP.pdf"
+    # Ensure you're in the app context
+    with (app.app_context()):
+        rgntn_serv = Recognition_service(
+            pdf,
+            6,
+            db
+        )
+        res = rgntn_serv.process(True)
+        rgntn_serv.draw_boxes_on_pdf()
+
+    assert res["Identifiant N Beneficiaire"] == "66816037"
+    # assert res["Nom/prenom Consultant"] == "GUILLARD Elodie"
+    # assert res["Adresse mail Organisme"] == "elodie.guillard@catalys-conseil.fr"
 
