@@ -16,7 +16,8 @@ def test_ca_signe_CSP_Ok():
             6,
             db
         )
-        res = rgntn_serv.process()
+        res = rgntn_serv.process(True)
+
     assert res["Identifiant N Beneficiaire"] == "60387042"
     assert res["Nom/prenom Consultant"] == "RIZZI Amélie"
     assert res["Adresse mail Organisme"] == "clisson@catalys-conseil.fr"
