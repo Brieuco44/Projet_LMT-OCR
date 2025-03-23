@@ -8,4 +8,8 @@ setuptools
 wheel
 Flask
 SQLAlchemy
+flask_sqlalchemy
 pytest
+python-dotenv
+flask_cors
+pymysql

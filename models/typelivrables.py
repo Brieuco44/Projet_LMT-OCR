@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import db
+from app import db
 
 class Typelivrables(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -3,6 +3,7 @@ from typing import List, Dict
 from sqlalchemy.orm import Session
 from pdf2image import convert_from_path
 import pytesseract
+from app import db
 
 from models.champs import Champs
 
@@ -61,7 +62,7 @@ class Recognition_service:
             results[champ.nom] = extracted_text
         return results
 
-    def get_champs_list(self, session: Session) -> List['Champs']:
+    def get_champs_list(self) -> List['Champs']:
         """
         Récupère la liste des objets Champs depuis la base de données MySQL,
         filtrée par l'idtypelivrable fourni lors de l'initialisation.
@@ -69,13 +70,13 @@ class Recognition_service:
         :param session: Session SQLAlchemy active.
         :return: Liste d'objets Champs correspondant au filtre.
         """
-        champs_list = session.query(Champs).filter_by(idtypelivrable=self.typelivrable).all()
+        champs_list = db.query(Champs).filter_by(idtypelivrable=self.typelivrable).all()
         return champs_list
 
-    def process(self,session: Session) -> Dict[str, str]:
+    def process(self) -> Dict[str, str]:
         """
         Recupère la list des champs execute l'OCR pour retourner un dictionnaire
         :param session:
         :return:
         """
-        return self.process_champs_list(self.get_champs_list(session))
+        return self.process_champs_list(self.get_champs_list())

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import db, Column, ForeignKey
+from app import db
 
 from models.typelivrables import Typelivrables
 
@@ -11,4 +11,4 @@ class Documents(db.Model):
 
     date: Mapped[datetime]
 
-    Column("idtypelivrable", ForeignKey(Typelivrables.id))
+    db.Column("idtypelivrable", db.ForeignKey(Typelivrables.id))
