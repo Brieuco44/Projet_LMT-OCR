@@ -22,8 +22,11 @@ def test_ca_signe_CSP_20_Ok():
     assert res["Identifiant N Beneficiaire"] == "60387042"
     assert res["Nom/prenom Consultant"] == "RIZZI Amélie"
     assert res["Adresse mail Organisme"] == "clisson@catalys-conseil.fr"
+    assert res["Date adhesion CSP"] == "08/03/2024"
+    assert res["Date Demarrer Accompagnement"] == "19/04/2024"
+    assert res["Date Fin Accompagnement"] == "07/03/2025"
 
-def test_ca_signe_CSP_21_Ok():
+def test_ca_signe_CSP_21_PasOk():
     # pdf "22 CA Signé CSP"
     pdf = ca_signe_csp + "21_CA_Signé_CSP.pdf"
     # Ensure you're in the app context
@@ -36,9 +39,13 @@ def test_ca_signe_CSP_21_Ok():
         res = rgntn_serv.process(True)
         rgntn_serv.draw_boxes_on_pdf()
 
+    # Fichier Décaler
     assert res["Identifiant N Beneficiaire"] == "66816037"
-    # assert res["Nom/prenom Consultant"] == "GUILLARD Elodie"
-    # assert res["Adresse mail Organisme"] == "elodie.guillard@catalys-conseil.fr"
+    assert res["Nom/prenom Consultant"] != "GUILLARD Elodie"
+    assert res["Adresse mail Organisme"] != "elodie.guillard@catalys-conseil.fr"
+    assert res["Date adhesion CSP"] != "09/03/2024"
+    assert res["Date Demarrer Accompagnement"] != "17/05/2024"
+    assert res["Date Fin Accompagnement"] != "07/03/2025"
 
 def test_ca_signe_CSP_22_Ok():
     pdf = ca_signe_csp + "22_CA_Signé_CSP.pdf"

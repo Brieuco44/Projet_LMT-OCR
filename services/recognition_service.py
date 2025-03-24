@@ -30,6 +30,19 @@ class Recognition_service:
     def box_to_tuples(self,box):
         return (box['x1'], box['y1'], box['x2'], box['y2'])
 
+    def extraction(self, box, page):
+        # Ajuste l'index de la page (les pages sont indexées à partir de 0)
+        image = self.pages[page - 1]  # Get the page image
+
+        # Convertir les coordonnées en format (left, upper, right, lower)
+        crop_box = self.box_to_tuples(box)
+
+        # Cropping the image
+        cropped = image.crop(crop_box)
+
+        # Extrait le texte de la zone découpée
+        return pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6').strip()
+
     def extract_text_from_box(self, box, page):
         """
         Extrait le texte contenu dans les coordonnées spécifiées sur la page indiquée.
@@ -38,66 +51,24 @@ class Recognition_service:
         :param page: Numéro de la page (commençant à 1).
         :return: Texte extrait de la zone.
         """
-        # Ajuste l'index de la page (les pages sont indexées à partir de 0)
-        image = self.pages[page - 1]  # Get the page image
-
-        # Convertir les coordonnées en format (left, upper, right, lower)
-        crop_box = self.box_to_tuples(box)
-
-        # Cropping the image
-        cropped = image.crop(crop_box)
-
-
-        # Extrait le texte de la zone découpée
-        return pytesseract.image_to_string(cropped)
+        return self.extraction(box,page)
 
     def extract_signature_from_box(self, box, page):
         """
         Renvoie True si signature sinon False : on remarque une signature s'il y a de l'encre dans la zone ou du texte.
-        :param box: Coordonnées {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048} de la zone à analyser.
+        :param box: Coordonnées {"x1": 1356, "x2": 2330, "y1": 2860, "y2": 3048} de la zone à analyser.
         :param page: Numéro de la page (commençant à 1).
         :return: True si une signature est détectée, sinon False.
         """
-        # Ajuste l'index de la page (les pages sont indexées à partir de 0)
-        image = self.pages[page - 1]  # Get the page image
-
-        # Convertir les coordonnées en format (left, upper, right, lower)
-        crop_box = self.box_to_tuples(box)
-
-        # Cropping the image
-        cropped = image.crop(crop_box)
-
         # Extrait le texte de la zone découpée avec pytesseract
-        extracted_text = pytesseract.image_to_string(cropped)
+        extracted_text = self.extraction(box,page)
 
         # Si du texte est extrait, on suppose que c'est une signature
         if extracted_text.strip():
             return True
 
-        # Si aucun texte n'est trouvé, vérifier la couleur de l'encre (ici on recherche des différences de couleur)
-        if self.check_color_difference(
-                cropped):  # Utilisez la méthode check_color_difference pour vérifier les couleurs
-            return True
-
         return False
 
-    def check_color_difference(self, cropped_image):
-        """
-        Vérifie s'il y a une différence de couleur dans l'image pour détecter de l'encre.
-        :param cropped_image: L'image découpée à analyser.
-        :return: True si une différence de couleur est détectée, sinon False.
-        """
-        pixels = cropped_image.load()
-
-        width, height = cropped_image.size
-        for x in range(width):
-            for y in range(height):
-                r, g, b = pixels[x, y]
-                # Vérifier si la couleur n'est pas grise (exemple de détection d'encre)
-                if r != g or g != b:  # Simple exemple : on vérifie si le pixel n'est pas gris
-                    return True
-
-        return False
 
     def extract_date_from_box(self, box, page):
         """
@@ -108,22 +79,7 @@ class Recognition_service:
         :param page: Numéro de la page à partir de 1.
         :return: Date extraite sous forme de chaîne de caractères ou "unknown" si la date n'est pas reconnue.
         """
-        image = self.pages[page - 1]
-
-        # Recadrage de la zone d'intérêt
-        crop_box = self.box_to_tuples(box)
-
-        cropped = image.crop(crop_box)
-
-        # save the image
-        cropped.save(str(crop_box) + '.jpg')  # Save the image
-
-        # Configurer pytesseract pour optimiser la reconnaissance des chiffres et des séparateurs
-        custom_config = r'--oem 3 --psm 6'
-        ocr_result = pytesseract.image_to_string(cropped, config=custom_config, lang='eng+fra')
-
-        # Nettoyer le texte reconnu
-        ocr_result = ocr_result.strip()
+        ocr_result = self.extraction(box,page)
 
         # Expression régulière pour détecter un format de date "dd/mm/yyyy" ou "dd/mm/yy"
         date_pattern = r'(\b\d{1,2}/\d{1,2}/(\d{2}|\d{4})\b)'
@@ -144,19 +100,25 @@ class Recognition_service:
         :param page: Numéro de la page (commençant à 1).
         :return: Texte extrait de la zone.
         """
-        # Ajuste l'index de la page (les pages sont indexées à partir de 0)
-        image = self.pages[page - 1]  # Get the page image
+        return self.extraction(box,page)
 
-        # Convertir les coordonnées en format (left, upper, right, lower)
-        crop_box = self.box_to_tuples(box)
+    def extract_identifiant_from_box(self, box, page):
+        """
+        Extrait le texte contenu dans les coordonnées spécifiées sur la page indiquée.
 
-        # Cropping the image
-        cropped = image.crop(crop_box)
+        :param box: Coordonnées {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048} de la zone à extraire.
+        :param page: Numéro de la page (commençant à 1).
+        :return: Texte extrait de la zone.
+        """
+        id = self.extraction(box, page)
+        # Trouver une séquence de 8 caractères alphanumériques consécutifs
+        match = re.search(r'[a-zA-Z0-9]{8}', id)
 
+        # Récupérer la valeur si trouvée, sinon mettre une chaîne vide
+        final_id = match.group(0) if match else ""
 
-        # Extrait le texte de la zone découpée
-        numbers = pytesseract.image_to_string(cropped).strip()
-        return numbers
+        return final_id
+
 
     def process_selected_boxe(self, champ):
         """
@@ -167,10 +129,12 @@ class Recognition_service:
         """
         if champ.type_champs_id == 3:  # Telephone
             return self.extract_telephone_from_box(champ.zone, champ.page)
-        if champ.type_champs_id == 4: # Signature
+        elif champ.type_champs_id == 4: # Signature
             return self.extract_signature_from_box(champ.zone, champ.page)
-        if champ.type_champs_id == 5: # Date
+        elif champ.type_champs_id == 5: # Date
             return self.extract_date_from_box(champ.zone, champ.page)
+        elif champ.type_champs_id == 6: # Date
+            return self.extract_identifiant_from_box(champ.zone, champ.page)
         else:
             return self.extract_text_from_box(champ.zone, champ.page).replace("/", "").strip()
 
