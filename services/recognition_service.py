@@ -136,6 +136,28 @@ class Recognition_service:
             # Si aucune date n'est reconnue, on retourne "unknown"
             return "unknown"
 
+    def extract_telephone_from_box(self, box, page):
+        """
+        Extrait le texte contenu dans les coordonnées spécifiées sur la page indiquée.
+
+        :param box: Coordonnées {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048} de la zone à extraire.
+        :param page: Numéro de la page (commençant à 1).
+        :return: Texte extrait de la zone.
+        """
+        # Ajuste l'index de la page (les pages sont indexées à partir de 0)
+        image = self.pages[page - 1]  # Get the page image
+
+        # Convertir les coordonnées en format (left, upper, right, lower)
+        crop_box = self.box_to_tuples(box)
+
+        # Cropping the image
+        cropped = image.crop(crop_box)
+
+
+        # Extrait le texte de la zone découpée
+        numbers = pytesseract.image_to_string(cropped).strip()
+        return numbers
+
     def process_selected_boxe(self, champ):
         """
         Extrait le texte de la zone et de la page indiquées pour un objet 'champ'.
@@ -143,6 +165,8 @@ class Recognition_service:
         :param champ: Objet Champs contenant les informations de zone et page.
         :return: Texte extrait de la zone spécifiée.
         """
+        if champ.type_champs_id == 3:  # Telephone
+            return self.extract_telephone_from_box(champ.zone, champ.page)
         if champ.type_champs_id == 4: # Signature
             return self.extract_signature_from_box(champ.zone, champ.page)
         if champ.type_champs_id == 5: # Date
