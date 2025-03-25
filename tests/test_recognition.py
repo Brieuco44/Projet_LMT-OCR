@@ -84,3 +84,4 @@ def test_ca_signe_CSP_22_Ok():
     assert res["Date Demarrer Accompagnement"] == "23/10/2024"
     assert res["Date Fin Accompagnement"] == "19/08/2025"
 
+
