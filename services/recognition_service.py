@@ -1,15 +1,16 @@
-from typing import List, Dict
-import re
+from typing import List, Dict, Any
 import json
-from PIL import ImageDraw, ImageEnhance, ImageFilter
-from pdf2image import convert_from_path
 import pytesseract
-
+from pdf2image import convert_from_path
+from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
+import torch
 from models.champs import Champs
+from models.zone import Zone
+import re
 
 
 class Recognition_service:
-    def __init__(self, pdf_path, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300):
+    def __init__(self, pdf_path, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download"):
         """
         Initialisation du service de reconnaissance.
 
@@ -26,6 +27,18 @@ class Recognition_service:
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
         self.db = db
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.model = AutoModelForQuestionAnswering.from_pretrained(model_path).to(self.device)
+
+        self.question_answerer = pipeline(
+            "question-answering",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            device=0 if torch.cuda.is_available() else -1,
+            framework="pt",  # Explicitly use PyTorch for performance
+            top_k=20,
+        )
 
     def box_to_tuples(self,box):
         return (box['x1'], box['y1'], box['x2'], box['y2'])
@@ -70,98 +83,88 @@ class Recognition_service:
         return False
 
 
-    def extract_date_from_box(self, box, page):
-        """
-        Extrait la date manuscrite (au format 19/04/2024 ou 19/04/24) d'une zone spécifiée sur une page.
-        Si la date n'est pas reconnue, retourne "unknown".
-
-        :param box: Coordonnées de la zone à analyser, par exemple {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048}.
-        :param page: Numéro de la page à partir de 1.
-        :return: Date extraite sous forme de chaîne de caractères ou "unknown" si la date n'est pas reconnue.
-        """
-        ocr_result = self.extraction(box,page)
-
-        # Expression régulière pour détecter un format de date "dd/mm/yyyy" ou "dd/mm/yy"
-        date_pattern = r'(\b\d{1,2}/\d{1,2}/(\d{2}|\d{4})\b)'
-        match = re.search(date_pattern, ocr_result)
-
-        if match:
-            # On retourne la première occurrence trouvée
-            return match.group(1)
-        else:
-            # Si aucune date n'est reconnue, on retourne "unknown"
-            return "unknown"
-
-    def extract_telephone_from_box(self, box, page):
-        """
-        Extrait le texte contenu dans les coordonnées spécifiées sur la page indiquée.
-
-        :param box: Coordonnées {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048} de la zone à extraire.
-        :param page: Numéro de la page (commençant à 1).
-        :return: Texte extrait de la zone.
-        """
-        return self.extraction(box,page)
-
-    def extract_identifiant_from_box(self, box, page):
-        """
-        Extrait le texte contenu dans les coordonnées spécifiées sur la page indiquée.
-
-        :param box: Coordonnées {'x1': 1356, 'x2': 2330, 'y1': 2860, 'y2': 3048} de la zone à extraire.
-        :param page: Numéro de la page (commençant à 1).
-        :return: Texte extrait de la zone.
-        """
-        id = self.extraction(box, page)
-        # Trouver une séquence de 8 caractères alphanumériques consécutifs
-        match = re.search(r'[a-zA-Z0-9]{8}', id)
-
-        # Récupérer la valeur si trouvée, sinon mettre une chaîne vide
-        final_id = match.group(0) if match else ""
-
-        return final_id
-
-
-    def process_selected_boxe(self, champ):
+    def process_selected_boxe(self, zone):
         """
         Extrait le texte de la zone et de la page indiquées pour un objet 'champ'.
 
         :param champ: Objet Champs contenant les informations de zone et page.
         :return: Texte extrait de la zone spécifiée.
         """
-        if champ.type_champs_id == 3:  # Telephone
-            return self.extract_telephone_from_box(champ.zone, champ.page)
-        elif champ.type_champs_id == 4: # Signature
-            return self.extract_signature_from_box(champ.zone, champ.page)
-        elif champ.type_champs_id == 5: # Date
-            return self.extract_date_from_box(champ.zone, champ.page)
-        elif champ.type_champs_id == 6: # Date
-            return self.extract_identifiant_from_box(champ.zone, champ.page)
-        else:
-            return self.extract_text_from_box(champ.zone, champ.page).replace("/", "").strip()
+        return self.extract_text_from_box(zone.coordonnees, zone.page).strip()
 
-    def process_champs_list(self, champs_list: List['Champs']) -> Dict[str, str]:
+    def process_champs_list(self, zones_list: List['Zone']) -> Dict[str, Dict[Any, Any]]:
         """
-        Parcourt une liste d'objets Champs, extrait le texte de leur zone et page,
-        et renvoie un dictionnaire avec le nom du champ ('nom') comme clé et le texte extrait comme valeur.
+        Iterates over a list of Zone objects, extracts text from their area and page,
+        and returns a dictionary with the field name ('nom') as a key and the extracted text as a value.
 
-        :param champs_list: Liste d'objets Champs.
-        :return: Dictionnaire {nom_du_champ: texte_extrait}.
+        :param zones_list: List of Zone objects.
+        :return: Dictionary {field_name: extracted_text}.
         """
-        results = {}
-        for champ in champs_list:
-            extracted_element = self.process_selected_boxe(champ)
-            results[champ.nom] = extracted_element
+        results: Dict[str, Dict[Any, Any]] = {}
+
+        for zone in zones_list:
+            extracted_element = self.process_selected_boxe(zone)
+            results[zone.libelle] = {}
+
+            for champ in self.get_champs_list_from_zone(zone.id):
+                if champ.question:
+                    results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question)
+
         return results
 
-    def get_champs_list(self) -> List['Champs']:
+    def get_zone_list(self) -> List['Zone']:
         """
-        Récupère la liste des objets Champs depuis la base de données MySQL,
-        filtrée par l'idtypelivrable fourni lors de l'initialisation.
-
         :param session: Session SQLAlchemy active.
         :return: Liste d'objets Champs correspondant au filtre.
         """
-        champs_list = self.db.session.query(Champs).filter_by(type_livrable_id=self.typelivrable).all()
+        champs_list = self.db.session.query(Zone).filter_by(type_livrable_id=self.typelivrable).all()
         return champs_list
+
+    def get_champs_list_from_zone(self, zoneid) -> List['Champs']:
+        """
+        :param session: Session SQLAlchemy active.
+        :return: Liste d'objets Champs correspondant au filtre.
+        """
+        champs_list = (
+            self.db.session.query(Champs)
+            .join(Zone, Champs.zoneid == zoneid)  # Jointure entre Champs et Zone
+            .filter(Zone.type_livrable_id == self.typelivrable)  # Filtrer sur le type_livrable_id
+            .all()
+        )
+        return champs_list
+
+    def get_answer_from_text(self, text, question):
+        """
+        Extracts the best possible answer from the given text using a question-answering model.
+        Improved post-processing to enforce a confidence threshold, clean punctuation, and normalize the answer.
+
+        :param text: The extracted text.
+        :param question: The question to ask.
+        :return: Extracted and formatted answer, or an empty string if not valid.
+        """
+        formatted_question = f"Quel est {question} ?"
+
+        results = self.question_answerer(question=formatted_question, context=text)
+
+        if not results:
+            return ""
+
+        # Select the best result based on score.
+        best_result = max(results, key=lambda r: r['score'])
+
+        best_answer = best_result['answer'].strip()
+
+
+        # Handle multi-line cases (e.g., addresses)
+        best_answer = best_answer.replace("\n", " ").replace("|","").strip()
+
+        # If a colon is present, take only the text after the first colon.
+        if ':' in best_answer:
+            best_answer = ""
+
+
+
+        return best_answer
 
     def process(self, jsonformat=False):
         """
@@ -171,52 +174,12 @@ class Recognition_service:
         :return: Dictionnaire des champs et texte extrait ou chaîne JSON.
         """
         # Récupère la liste des champs et extrait le texte
-        champs_data = self.process_champs_list(self.get_champs_list())
+        champs_data = self.process_champs_list(self.get_zone_list())
 
         # Si jsonformat est True, renvoie le résultat en format JSON
         if jsonformat:
+            print()
             print(json.dumps(champs_data))
 
         return champs_data
 
-    def draw_boxes_on_pdf(self, output_pdf_path="output_with_boxes.pdf"):
-        """
-        Dessine des rectangles autour des zones spécifiées pour chaque champ sur les pages du PDF
-        et sauvegarde le résultat dans un nouveau fichier PDF.
-
-        :param output_pdf_path: Chemin du PDF de sortie avec les zones encadrées.
-        """
-        # Récupère la liste des champs depuis la base de données
-        champs_list = self.get_champs_list()
-
-        # Organise les boîtes par numéro de page (les pages commencent à 1)
-        page_boxes = {}
-        for champ in champs_list:
-            # On suppose que 'champ.zone' est un tuple (x1, y1, x2, y2) et 'champ.page' est le numéro de page (commençant à 1)
-            boxes = page_boxes.setdefault(champ.page, [])
-            boxes.append(champ.zone)
-
-        # Crée une nouvelle liste d'images avec les rectangles dessinés
-        drawn_pages = []
-        for idx, page_img in enumerate(self.pages, start=1):
-            # Si la page contient des boîtes, les dessiner
-            if idx in page_boxes:
-                # Crée une copie de l'image pour ne pas altérer l'image originale
-                img_copy = page_img.copy()
-                draw = ImageDraw.Draw(img_copy)
-                for box in page_boxes[idx]:
-                    # Dessine un rectangle rouge avec une épaisseur de 2 pixels
-                    draw.rectangle(self.box_to_tuples(box), outline="red", width=2)
-                drawn_pages.append(img_copy)
-            else:
-                drawn_pages.append(page_img)
-
-        # Sauvegarde toutes les pages modifiées dans un nouveau PDF
-        if drawn_pages:
-            drawn_pages[0].save(
-                output_pdf_path,
-                "PDF",
-                resolution=self.dpi,
-                save_all=True,
-                append_images=drawn_pages[1:]
-            )
