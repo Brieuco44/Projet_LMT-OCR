@@ -21,6 +21,12 @@ def test_ca_signe_CSP_20_new():
 
     assert res["Beneficiare"]["Identifiant N Beneficiaire"] == "60387042"
     assert res["Consultant"]["Nom/prenom Consultant"] == "RIZZI Amélie"
+    assert res["Organisme Prestataire"]["Organisme"] == "SOCIETE NOUVELLE CATALYS"
+    # assert res["Organisme Prestataire"]["Adresse Organisme"] == "Coworking l'Alter Eco 11 rue des ajoncs"
+    assert res["Organisme Prestataire"]["Code Postal Organisme"] == "44190"
+    assert res["Organisme Prestataire"]["Ville Organisme"] == "CLISSON"
+    assert res["Organisme Prestataire"]["N Marche Organisme"] == "14539"
+    assert res["Organisme Prestataire"]["Lettre de commande Organisme"] == "SHLIRZ0756"
     assert res["Organisme Prestataire"]["Adresse mail Organisme"] == "clisson@catalys-conseil.fr"
     assert res["Information"]["Date adhesion CSP"] == "08/03/2024"
     assert res["Information"]["Date Demarrer Accompagnement"] == "19/04/2024"
@@ -65,7 +71,7 @@ def test_ca_signe_CSP_22_Ok():
     assert res["Information"]["Date Fin Accompagnement"] ==  "06/08/2025"
 
 
-def test_ca_signe_CSP_22_Ok():
+def test_ca_signe_CSP_2_Ok():
     pdf = ca_signe_csp + "2_CA_Signé_CSP.pdf"
     with (app.app_context()):
         rgntn_serv = Recognition_service(
