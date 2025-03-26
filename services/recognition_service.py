@@ -6,8 +6,11 @@ from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import torch
 from models.champs import Champs
 from models.zone import Zone
-import re
-
+from PIL import ImageDraw
+import cv2
+import numpy as np
+from skimage import measure, morphology
+from skimage.measure import regionprops
 
 class Recognition_service:
     def __init__(self, pdf_path, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download"):
@@ -52,6 +55,8 @@ class Recognition_service:
 
         # Cropping the image
         cropped = image.crop(crop_box)
+
+        cropped.save("img.png")
 
         # Extrait le texte de la zone découpée
         return pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6').strip()
@@ -107,8 +112,11 @@ class Recognition_service:
             results[zone.libelle] = {}
 
             for champ in self.get_champs_list_from_zone(zone.id):
-                if champ.question:
-                    results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question)
+                if champ.type_champs_id == 4:
+                    results[zone.libelle][champ.nom] = self.has_signature(zone.coordonnees, zone.page)
+                else:
+                    if champ.question:
+                        results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question)
 
         return results
 
@@ -183,3 +191,58 @@ class Recognition_service:
 
         return champs_data
 
+    def draw_boxes_on_pdf(self, output_pdf_path="output_with_boxes.pdf"):
+        """
+        Draws rectangles around specified areas for each field on the PDF pages
+        and saves the result as a new PDF.
+
+        :param output_pdf_path: Path of the output PDF with marked areas.
+        """
+        # Retrieve the list of zones from the database
+        zones_list = self.get_zone_list()
+
+        # Organize boxes by page number (pages start at 1)
+        page_boxes = {}
+        for zone in zones_list:
+            boxes = page_boxes.setdefault(zone.page, [])
+            boxes.append(zone.coordonnees)
+
+        # Create a new list of images with drawn rectangles
+        drawn_pages = []
+        for idx, page_img in enumerate(self.pages, start=1):
+            # Draw boxes only if the page has them
+            if idx in page_boxes:
+                img_copy = page_img.copy()
+                draw = ImageDraw.Draw(img_copy)
+                for box in page_boxes[idx]:
+                    draw.rectangle(self.box_to_tuples(box), outline="red", width=2)
+                drawn_pages.append(img_copy)
+            else:
+                drawn_pages.append(page_img)
+
+        # Save all modified pages into a new PDF
+        if drawn_pages:
+            drawn_pages[0].save(
+                output_pdf_path,
+                "PDF",
+                resolution=self.dpi,
+                save_all=True,
+                append_images=drawn_pages[1:]
+            )
+
+    def has_signature(self, box, page):
+        """
+        Detects if a signature is present in the specified box on a given page.
+
+        :param box: Dictionary with coordinates {"x1": ..., "x2": ..., "y1": ..., "y2": ...}.
+        :param page: Page number (starting from 1).
+        :return: True if a signature is detected, otherwise False.
+        """
+        # Extract the image portion from the PDF page
+        cropped = self.extraction(box,page)
+
+        # Si du texte est extrait, on suppose que c'est une signature
+        if cropped.strip():
+            return True
+
+        return False
