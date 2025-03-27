@@ -59,7 +59,7 @@ class Recognition_service:
         cropped.save("img.png")
 
         # Extrait le texte de la zone découpée
-        return pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6').strip()
+        return pytesseract.image_to_string(cropped, config=r'--oem 1 --psm 6').strip()
 
     def extract_text_from_box(self, box, page):
         """
@@ -116,7 +116,7 @@ class Recognition_service:
                     results[zone.libelle][champ.nom] = self.has_signature(zone.coordonnees, zone.page)
                 else:
                     if champ.question:
-                        results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question)
+                        results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question,champ.type_champs_id)
 
         return results
 
@@ -141,7 +141,28 @@ class Recognition_service:
         )
         return champs_list
 
-    def get_answer_from_text(self, text, question):
+    def correct_nummarche(self,text):
+        # Remove leading/trailing spaces
+        text = text.strip()
+        # Expecting exactly 10 characters: 6 letters + 4 digits
+        if len(text) != 10:
+            # Optionally handle unexpected lengths (e.g., pad, log, or return original)
+            return text
+
+        # Split into expected letter part and digit part
+        letter_part = text[:6]
+        digit_part = text[6:]
+
+        # For the letter part, if any digit '0' appears (OCR might mis-read it),
+        # you may want to convert it to 'O' (assuming it's a letter).
+        corrected_letter = ''.join('O' if char == '0' else char for char in letter_part)
+
+        # For the digit part, if any letter 'O' appears, convert it to '0'
+        corrected_digit = ''.join('0' if char.upper() == 'O' else char for char in digit_part)
+
+        return corrected_letter + corrected_digit
+
+    def get_answer_from_text(self, text, question,type_champs_id):
         """
         Extracts the best possible answer from the given text using a question-answering model.
         Improved post-processing to enforce a confidence threshold, clean punctuation, and normalize the answer.
@@ -170,7 +191,10 @@ class Recognition_service:
         if ':' in best_answer:
             best_answer = ""
 
-
+        if type_champs_id==1:
+            print(best_answer)
+            best_answer = self.correct_nummarche(best_answer)
+            print(best_answer)
 
         return best_answer
 

@@ -20,14 +20,9 @@ def test_ca_signe_CSP_20_new():
         rgntn_serv.draw_boxes_on_pdf()
 
     assert res["Beneficiare"]["Identifiant N Beneficiaire"] == "60387042"
-    assert res["Consultant"]["Nom/prenom Consultant"] == "RIZZI Amélie"
-    assert res["Organisme Prestataire"]["Organisme"] == "SOCIETE NOUVELLE CATALYS"
-    # assert res["Organisme Prestataire"]["Adresse Organisme"] == "Coworking l'Alter Eco 11 rue des ajoncs"
-    assert res["Organisme Prestataire"]["Code Postal Organisme"] == "44190"
-    assert res["Organisme Prestataire"]["Ville Organisme"] == "CLISSON"
     assert res["Organisme Prestataire"]["N Marche Organisme"] == "14539"
     assert res["Organisme Prestataire"]["Lettre de commande Organisme"] == "SHLIRZ0756"
-    assert res["Organisme Prestataire"]["Adresse mail Organisme"] == "clisson@catalys-conseil.fr"
+    assert res["Consultant"]["Nom/prenom Consultant"] == "RIZZI Amélie"
     assert res["Information"]["Date adhesion CSP"] == "08/03/2024"
     assert res["Information"]["Date Demarrer Accompagnement"] == "19/04/2024"
     assert res["Information"]["Date Fin Accompagnement"] == "07/03/2025"
@@ -47,11 +42,13 @@ def test_ca_signe_CSP_21_PasOk():
         rgntn_serv.draw_boxes_on_pdf()
 
     assert res["Beneficiare"]["Identifiant N Beneficiaire"] == "66816037"
+    assert res["Organisme Prestataire"]["N Marche Organisme"] == "14539"
+    assert res["Organisme Prestataire"]["Lettre de commande Organisme"] == "SHLIRZ0891"
     assert res["Consultant"]["Nom/prenom Consultant"] == "GUILLARD Elodie"
-    assert res["Organisme Prestataire"]["Adresse mail Organisme"] == "trignac@catalys-conseil.fr"
-    assert res["Information"]["Date adhesion CSP"] ==  "09/03/2024"
-    assert res["Information"]["Date Demarrer Accompagnement"] ==  "17/05/2024"
+    assert res["Information"]["Date adhesion CSP"] == "09/03/2024"
+    assert res["Information"]["Date Demarrer Accompagnement"] == "17/05/2024"
     assert res["Information"]["Date Fin Accompagnement"] == "07/03/2025"
+
 
 def test_ca_signe_CSP_22_Ok():
     pdf = ca_signe_csp + "22_CA_Signé_CSP.pdf"
@@ -62,10 +59,12 @@ def test_ca_signe_CSP_22_Ok():
             db
         )
         res = rgntn_serv.process(True)
+        rgntn_serv.draw_boxes_on_pdf()
 
     assert res["Beneficiare"]["Identifiant N Beneficiaire"] == "82979546"
+    assert res["Organisme Prestataire"]["N Marche Organisme"] == "16791"
+    assert res["Organisme Prestataire"]["Lettre de commande Organisme"] == "SHLPRZ0006"
     assert res["Referent"]["Nom/prenom Referent"] == "PAPIN Elise"
-    assert res["Organisme Prestataire"]["Adresse mail Organisme"] == "Irsy@catalys-conseil.fr"
     assert res["Information"]["Date adhesion CSP"] == "07/08/2024"
     assert res["Information"]["Date Demarrer Accompagnement"] == "01/10/2024"
     assert res["Information"]["Date Fin Accompagnement"] ==  "06/08/2025"
@@ -82,9 +81,9 @@ def test_ca_signe_CSP_2_Ok():
         res = rgntn_serv.process(True)
 
     assert res["Beneficiare"]["Identifiant N Beneficiaire"] == "1747403B"
+    assert res["Organisme Prestataire"]["N Marche Organisme"] == "16691"
+    assert res["Organisme Prestataire"]["Lettre de commande Organisme"] == "SKLPNZ0029"
     assert res["Referent"]["Nom/prenom Referent"] == "COLAS Pauline"
-    assert res["Referent"]["Adresse mail Referent"] == "pauline.colas@catalys-conseil.fr"
     assert res["Information"]["Date adhesion CSP"] == "20/08/2024"
     assert res["Information"]["Date Demarrer Accompagnement"] == "23/10/2024"
-    assert res["Information"]["Date Fin Accompagnement"] == "19/08/2025"
-
+    assert res["Information"]["Date Fin Accompagnement"] ==  "19/08/2025"

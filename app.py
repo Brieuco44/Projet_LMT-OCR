@@ -26,6 +26,7 @@ db = initBase(app)
 
 @app.route('/', methods=['POST'])
 def analyseLivrable():
+
     if 'pdffile' not in request.files:
         return jsonify({"error": "Aucun fichier"}), 400
 
