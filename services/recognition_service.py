@@ -7,10 +7,6 @@ import torch
 from models.champs import Champs
 from models.zone import Zone
 from PIL import ImageDraw
-import cv2
-import numpy as np
-from skimage import measure, morphology
-from skimage.measure import regionprops
 
 class Recognition_service:
     def __init__(self, pdf_path, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download"):
