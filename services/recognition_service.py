@@ -192,9 +192,7 @@ class Recognition_service:
             best_answer = ""
 
         if type_champs_id==1:
-            print(best_answer)
             best_answer = self.correct_nummarche(best_answer)
-            print(best_answer)
 
         return best_answer
 
