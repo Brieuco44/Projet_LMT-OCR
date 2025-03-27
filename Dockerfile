@@ -1,20 +1,20 @@
-# Utilisation de l'image officielle Python
 FROM python:3.11
 
-# Définition du répertoire de travail
 WORKDIR /app
 
-# Copie des fichiers nécessaires
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    libtesseract-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 
-# Installation des dépendances
-RUN pip install -r requirements.txt
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Copie du code source
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
-# Exposition du port Flask
 EXPOSE 5000
 
-# Commande par défaut
 CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]
