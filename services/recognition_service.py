@@ -3,7 +3,7 @@ import json
 
 import numpy as np
 import pytesseract
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path, convert_from_bytes
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import torch
 from models.champs import Champs
@@ -15,7 +15,7 @@ from ultralytics import YOLO
 import supervision as sv
 
 class Recognition_service:
-    def __init__(self, pdf_path, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download"):
+    def __init__(self, pdf, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download",signature_model="../signature_model.pt"):
         """
         Initialisation du service de reconnaissance.
 
@@ -24,11 +24,16 @@ class Recognition_service:
         :param tesseract_cmd: Chemin vers l'exécutable Tesseract.
         :param dpi: Résolution (DPI) utilisée pour convertir le PDF en images.
         """
-        self.pdf_path = pdf_path
+        self.pdf_path = pdf
         self.typelivrable = idtypelivrable
         self.tesseract_cmd = tesseract_cmd
         self.dpi = dpi
-        self.pages = convert_from_path(pdf_path, dpi=dpi)
+        self.signature_model = signature_model
+
+        if pdf is type(str):
+            self.pages = convert_from_path(pdf, dpi=dpi)
+        else:
+            self.pages = convert_from_bytes(pdf.read(), dpi=dpi)
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
         self.db = db
@@ -256,7 +261,7 @@ class Recognition_service:
 
     def has_signature(self, box, page):
         # Load the saved model
-        loaded_model = YOLO("../signature_model.pt")
+        loaded_model = YOLO(self.signature_model)
 
         # Crop the image from the page using the box coordinates
         # (Ensure that self.pages contains PIL images and box_to_tuples returns a tuple suitable for PIL.crop)
