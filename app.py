@@ -24,16 +24,24 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = initBase(app)
 
 
-@app.route('/', methods=['POST'])
+@app.route('/analyse', methods=['POST'])
 def analyseLivrable():
 
     if 'pdffile' not in request.files:
         return jsonify({"error": "Aucun fichier"}), 400
 
     pdffile = request.files['pdffile']
+
     typelivrable = request.form['typelivrable']
 
-    rgntn_serv = services.recognition_service.Recognition_service(pdffile, typelivrable, db, typelivrable)
+    rgntn_serv = services.recognition_service.Recognition_service(
+        pdffile,
+        typelivrable,
+        db,
+        model_path="./roberta_large_squad2_download",
+        signature_model="./signature_model.pt"
+    )
+
 
     return rgntn_serv.process(True)
 

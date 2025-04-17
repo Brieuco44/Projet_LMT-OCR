@@ -8,7 +8,7 @@ ca_signe_csp = path + "ca_signe_csp/"
 
 def test_ca_signe_CSP_20_new():
     # pdf "22 CA Signé CSP"
-    pdf = ca_signe_csp + "20_CA_Signé_CSP.pdf"
+    pdf = ca_signe_csp + "20_CA_Signé_CSP_WS.pdf"
     # Ensure you're in the app context
     with (app.app_context()):
         rgntn_serv = Recognition_service(

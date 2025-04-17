@@ -1,15 +1,24 @@
 from typing import List, Dict, Any
 import json
+
+import numpy as np
 import pytesseract
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path, convert_from_bytes
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import torch
 from models.champs import Champs
 from models.zone import Zone
 from PIL import ImageDraw
+import cv2
+
+from ultralytics import YOLO
+import supervision as sv
+
+from services.DateOCRProcessor import DateOCRProcessor
+
 
 class Recognition_service:
-    def __init__(self, pdf_path, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download"):
+    def __init__(self, pdf, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download",signature_model="../signature_model.pt"):
         """
         Initialisation du service de reconnaissance.
 
@@ -18,11 +27,16 @@ class Recognition_service:
         :param tesseract_cmd: Chemin vers l'exécutable Tesseract.
         :param dpi: Résolution (DPI) utilisée pour convertir le PDF en images.
         """
-        self.pdf_path = pdf_path
-        self.typelivrable = idtypelivrable  # idtypelivrable passé en paramètre
+        self.pdf_path = pdf
+        self.typelivrable = idtypelivrable
         self.tesseract_cmd = tesseract_cmd
         self.dpi = dpi
-        self.pages = convert_from_path(pdf_path, dpi=dpi)
+        self.signature_model = signature_model
+
+        if pdf is type(str):
+            self.pages = convert_from_path(pdf, dpi=dpi)
+        else:
+            self.pages = convert_from_bytes(pdf.read(), dpi=dpi)
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
         self.db = db
@@ -35,8 +49,8 @@ class Recognition_service:
             model=self.model,
             tokenizer=self.tokenizer,
             device=0 if torch.cuda.is_available() else -1,
-            framework="pt",  # Explicitly use PyTorch for performance
-            top_k=20,
+            framework="pt",
+            top_k=5,
         )
 
     def box_to_tuples(self,box):
@@ -52,7 +66,7 @@ class Recognition_service:
         # Cropping the image
         cropped = image.crop(crop_box)
 
-        cropped.save("img.png")
+        cropped.save(f"{box}.png")
 
         # Extrait le texte de la zone découpée
         return pytesseract.image_to_string(cropped, config=r'--oem 1 --psm 6').strip()
@@ -66,22 +80,6 @@ class Recognition_service:
         :return: Texte extrait de la zone.
         """
         return self.extraction(box,page)
-
-    def extract_signature_from_box(self, box, page):
-        """
-        Renvoie True si signature sinon False : on remarque une signature s'il y a de l'encre dans la zone ou du texte.
-        :param box: Coordonnées {"x1": 1356, "x2": 2330, "y1": 2860, "y2": 3048} de la zone à analyser.
-        :param page: Numéro de la page (commençant à 1).
-        :return: True si une signature est détectée, sinon False.
-        """
-        # Extrait le texte de la zone découpée avec pytesseract
-        extracted_text = self.extraction(box,page)
-
-        # Si du texte est extrait, on suppose que c'est une signature
-        if extracted_text.strip():
-            return True
-
-        return False
 
 
     def process_selected_boxe(self, zone):
@@ -108,8 +106,13 @@ class Recognition_service:
             results[zone.libelle] = {}
 
             for champ in self.get_champs_list_from_zone(zone.id):
+
                 if champ.type_champs_id == 4:
                     results[zone.libelle][champ.nom] = self.has_signature(zone.coordonnees, zone.page)
+                elif champ.type_champs_id == 7:
+                    find = self.has_handwrittenDate(zone.coordonnees, zone.page)
+                    results[zone.libelle][champ.nom] = find[0]
+                    results[zone.libelle]["Confiance"] = f"{find[1] * 100:.1f} %" if find[1] is not None else ""
                 else:
                     if champ.question:
                         results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question,champ.type_champs_id)
@@ -179,13 +182,19 @@ class Recognition_service:
 
         best_answer = best_result['answer'].strip()
 
+        print(text)
+        print('------------')
+        print(formatted_question)
+        print('------------')
+        print(best_result)
+        print('------------')
 
         # Handle multi-line cases (e.g., addresses)
         best_answer = best_answer.replace("\n", " ").replace("|","").strip()
 
-        # If a colon is present, take only the text after the first colon.
+        # If there's a colon, split and take the part after it
         if ':' in best_answer:
-            best_answer = ""
+            best_answer = best_answer.split(':', 1)[1].strip()
 
         if type_champs_id==1:
             best_answer = self.correct_nummarche(best_answer)
@@ -208,6 +217,51 @@ class Recognition_service:
             print(json.dumps(champs_data))
 
         return champs_data
+
+
+    def has_signature(self, box, page):
+        # Load the saved model
+        loaded_model = YOLO(self.signature_model)
+
+        # Crop the image from the page using the box coordinates
+        # (Ensure that self.pages contains PIL images and box_to_tuples returns a tuple suitable for PIL.crop)
+        pil_image = self.pages[page - 1].crop(self.box_to_tuples(box))
+
+        # Convert the PIL image to a NumPy array for OpenCV (PIL image is in RGB)
+        image = np.array(pil_image)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        # Use the loaded model for inference on the cropped image
+        results = loaded_model(image)
+
+        # Process results to create detections
+        detections = sv.Detections.from_ultralytics(results[0])
+
+        # # Annotate the image with detection boxes (for visualization if needed)
+        # box_annotator = sv.BoxAnnotator()
+        # annotated_image = box_annotator.annotate(scene=image, detections=detections)
+
+        # Display the annotated image (optional)
+        # cv2.imshow("Detections", annotated_image)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+
+        # Check if any detections were made
+        if len(detections) == 0:
+            return False
+        else:
+            return True
+
+    def has_handwrittenDate(self, box, page):
+
+        pil_image = self.pages[page - 1].crop(self.box_to_tuples(box))
+
+        # Convert the PIL image to a NumPy array for OpenCV (PIL image is in RGB)
+        image = np.array(pil_image)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        # Use the loaded model for inference on the cropped image
+        return DateOCRProcessor().run(image)
 
     def draw_boxes_on_pdf(self, output_pdf_path="output_with_boxes.pdf"):
         """
@@ -247,20 +301,3 @@ class Recognition_service:
                 save_all=True,
                 append_images=drawn_pages[1:]
             )
-
-    def has_signature(self, box, page):
-        """
-        Detects if a signature is present in the specified box on a given page.
-
-        :param box: Dictionary with coordinates {"x1": ..., "x2": ..., "y1": ..., "y2": ...}.
-        :param page: Page number (starting from 1).
-        :return: True if a signature is detected, otherwise False.
-        """
-        # Extract the image portion from the PDF page
-        cropped = self.extraction(box,page)
-
-        # Si du texte est extrait, on suppose que c'est une signature
-        if cropped.strip():
-            return True
-
-        return False
