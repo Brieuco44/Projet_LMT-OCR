@@ -42,6 +42,7 @@ def analyseLivrable():
         signature_model="./signature_model.pt"
     )
 
+
     return rgntn_serv.process(True)
 
 if __name__ == '__main__':
