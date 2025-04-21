@@ -6,7 +6,6 @@ pymysql
 cryptography
 pytest
 python-dotenv
-
 pytesseract
 pdf2image
 pillow
@@ -14,7 +13,9 @@ opencv-python
 packaging
 setuptools
 wheel
-pip
-
+ultralytics
+supervision
 transformers
 paddlepaddle
+paddleocr
+scikit-learn

@@ -38,7 +38,7 @@ def test_ca_signe_CSP_21_PasOk():
             db
         )
         res = rgntn_serv.process(True)
-        print(res)
+        # print(res)
         rgntn_serv.draw_boxes_on_pdf()
 
     assert res["Beneficiare"]["Identifiant N Beneficiaire"] == "66816037"

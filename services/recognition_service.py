@@ -6,8 +6,7 @@ import pytesseract
 from pdf2image import convert_from_path, convert_from_bytes
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import torch
-from models.champs import Champs
-from models.zone import Zone
+
 from PIL import ImageDraw
 import cv2
 
@@ -33,8 +32,10 @@ class Recognition_service:
         self.dpi = dpi
         self.signature_model = signature_model
 
-        if pdf is type(str):
+        if isinstance(pdf, str):
             self.pages = convert_from_path(pdf, dpi=dpi)
+            # page 1 size
+            print(self.pages[0].size)
         else:
             self.pages = convert_from_bytes(pdf.read(), dpi=dpi)
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
@@ -66,7 +67,7 @@ class Recognition_service:
         # Cropping the image
         cropped = image.crop(crop_box)
 
-        cropped.save(f"{box}.png")
+        #cropped.save(f"{box}.png")
 
         # Extrait le texte de la zone découpée
         return pytesseract.image_to_string(cropped, config=r'--oem 1 --psm 6').strip()
@@ -124,6 +125,7 @@ class Recognition_service:
         :param session: Session SQLAlchemy active.
         :return: Liste d'objets Champs correspondant au filtre.
         """
+        from models.zone import Zone
         champs_list = self.db.session.query(Zone).filter_by(type_livrable_id=self.typelivrable).all()
         return champs_list
 
@@ -132,6 +134,8 @@ class Recognition_service:
         :param session: Session SQLAlchemy active.
         :return: Liste d'objets Champs correspondant au filtre.
         """
+        from models.champs import Champs
+        from models.zone import Zone
         champs_list = (
             self.db.session.query(Champs)
             .join(Zone, Champs.zoneid == zoneid)  # Jointure entre Champs et Zone
@@ -182,12 +186,12 @@ class Recognition_service:
 
         best_answer = best_result['answer'].strip()
 
-        print(text)
-        print('------------')
-        print(formatted_question)
-        print('------------')
-        print(best_result)
-        print('------------')
+        # print(text)
+        # print('------------')
+        # print(formatted_question)
+        # print('------------')
+        # print(best_result)
+        # print('------------')
 
         # Handle multi-line cases (e.g., addresses)
         best_answer = best_answer.replace("\n", " ").replace("|","").strip()
@@ -273,10 +277,13 @@ class Recognition_service:
         # Retrieve the list of zones from the database
         zones_list = self.get_zone_list()
 
-        # Organize boxes by page number (pages start at 1)
+        # Organize boxes by page number (pages start at 1)  392, 230, 697, 388 {'x1': 392, 'x2': 230, 'y1': 697, 'y2': 388}
+#        page_boxes = {1: [{'x1': 1269, 'x2': 2324, 'y1': 759, 'y2': 1551 }]}
         page_boxes = {}
+
         for zone in zones_list:
             boxes = page_boxes.setdefault(zone.page, [])
+
             boxes.append(zone.coordonnees)
 
         # Create a new list of images with drawn rectangles

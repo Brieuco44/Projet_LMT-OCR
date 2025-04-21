@@ -1,10 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from app import db
-from sqlalchemy import JSON
-
 
 from models.typechamps import Typechamps
-from models.typelivrables import Typelivrables
 from models.zone import Zone
 
 
