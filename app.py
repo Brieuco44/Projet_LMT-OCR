@@ -7,8 +7,8 @@ import services.recognition_service
 import os
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer
 
-model_name = "deepset/roberta-base-squad2"
-save_directory = "./roberta_base_squad2_download"
+model_name = "deepset/roberta-large-squad2"
+save_directory = "./roberta_large_squad2_download"
 
 # Download and save only if the directory doesn't already exist
 if not os.path.exists(save_directory):
