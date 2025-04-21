@@ -1,6 +1,6 @@
 services:
   flask-app:
-    build: .
+    image: ocr_api:latest
     ports:
       - "5000:5000"
     volumes:
