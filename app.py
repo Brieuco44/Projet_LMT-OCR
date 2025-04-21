@@ -1,5 +1,4 @@
-from flask import Flask, jsonify,request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask,request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from database import DB_URL, initBase, CLEF_SECRET
