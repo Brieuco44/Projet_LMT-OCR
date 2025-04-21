@@ -17,7 +17,7 @@ from services.DateOCRProcessor import DateOCRProcessor
 
 
 class Recognition_service:
-    def __init__(self, pdf, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_large_squad2_download",signature_model="../signature_model.pt"):
+    def __init__(self, pdf, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_base_squad2_download",signature_model="../signature_model.pt"):
         """
         Initialisation du service de reconnaissance.
 
