@@ -4,6 +4,23 @@ from dotenv import load_dotenv
 from database import DB_URL, initBase, CLEF_SECRET
 import services.recognition_service
 # Charger les variables d'environnement
+import os
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer
+
+model_name = "deepset/roberta-base-squad2"
+save_directory = "./roberta_base_squad2_download"
+
+# Download and save only if the directory doesn't already exist
+if not os.path.exists(save_directory):
+    print("Downloading and saving model...")
+    model = AutoModelForQuestionAnswering.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    model.save_pretrained(save_directory)
+    tokenizer.save_pretrained(save_directory)
+else:
+    print("Model already exists locally. Skipping download.")
+
 load_dotenv()
 
 # Initialiser l'application Flask
