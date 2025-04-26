@@ -5,11 +5,17 @@ import cv2
 from pdf2image import convert_from_path
 
 class Draw:
-    def __init__(self, pdf_path, dpi=300):
+    def __init__(self, pdf_path, page_number=1, dpi=300):
         self.pdf_path = pdf_path
         self.dpi = dpi
         self.pages = convert_from_path(pdf_path, dpi=dpi)
-        self.current_page = self.pages[0]
+
+        # Make sure page_number is within bounds
+        if page_number < 1 or page_number > len(self.pages):
+            raise ValueError(f"Page number {page_number} is out of range. The document has {len(self.pages)} pages.")
+
+        self.current_page = self.pages[page_number - 1]  # page_number is 1-indexed
+
         self.temp_image_path = "temp_page.png"
         self.selected_boxes = []
 
@@ -71,9 +77,10 @@ class Draw:
 def main():
     parser = argparse.ArgumentParser(description="Extract text from a PDF using interactive zone selection.")
     parser.add_argument("pdf_file", help="Path to the input PDF file")
+    parser.add_argument("--page", type=int, default=1, help="Page number to select zones from (default: 1)")
     args = parser.parse_args()
 
-    pdf_extractor = Draw(args.pdf_file)
+    pdf_extractor = Draw(args.pdf_file, page_number=args.page)
     pdf_extractor.interactive_zone_selection()
 
 if __name__ == "__main__":
