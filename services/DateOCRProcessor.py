@@ -120,7 +120,7 @@ class DateOCRProcessor:
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
         binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-        cv2.imwrite("processed_image.png", binary)  # Save for debugging
+        #cv2.imwrite("processed_image.png", binary)  # Save for debugging
         return Image.fromarray(binary)
 
     def correct_date_text(self, text, two_digit_year_cutoff=30):
@@ -130,14 +130,6 @@ class DateOCRProcessor:
         """
         corrected = ''.join(CHAR_MAP.get(c, c) for c in text)
         corrected_list = list(corrected)
-
-        # 2) Prepare raw digits-only string
-        # withoutslash = ''.join(corrected_list) \
-        #     .replace('/', '').replace('-', '') \
-        #     .replace(' ', '').replace(':', '') \
-        #     .replace('.', '').replace(',', '') \
-        #     .replace(';', '').replace("'", '').replace('"', '').replace('+', '')
-        # import re
 
         withoutslash = re.sub(r'\D', '', ''.join(corrected_list))
 
@@ -208,14 +200,14 @@ class DateOCRProcessor:
         for line in result[0]:
             text = line[1][0]
             confidence = line[1][1]
-            print("Detected text: ", text, "Confidence: ", confidence)
+            #print("Detected text: ", text, "Confidence: ", confidence)
             match = self.date_pattern.search(text)
             if match:
                 return match.group(), confidence
 
             corrected = self.correct_date_text(text)
 
-            print("Corrected text: ", corrected)
+            #print("Corrected text: ", corrected)
 
             if corrected is None:
                 continue

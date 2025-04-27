@@ -1,3 +1,4 @@
+import re
 from typing import List, Dict, Any
 import json
 
@@ -34,10 +35,10 @@ class Recognition_service:
 
         if isinstance(pdf, str):
             self.pages = convert_from_path(pdf, dpi=dpi)
-            # page 1 size
-            print(self.pages[0].size)
+            self.nbpages = len(self.pages)
         else:
             self.pages = convert_from_bytes(pdf.read(), dpi=dpi)
+            self.nbpages = len(self.pages)
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
         self.db = db
@@ -59,6 +60,10 @@ class Recognition_service:
 
     def extraction(self, box, page):
         # Ajuste l'index de la page (les pages sont indexées à partir de 0)
+        if page > self.nbpages:
+            print("Page not found ", page)
+            return ""
+
         image = self.pages[page - 1]  # Get the page image
 
         # Convertir les coordonnées en format (left, upper, right, lower)
@@ -82,6 +87,34 @@ class Recognition_service:
         """
         return self.extraction(box,page)
 
+    def extract_case_check(self, text: str) -> bool:
+        """
+        Returns True if the box was checked, False otherwise.
+        If 'case' (or its OCR‐variants) is missing—because the mark may have over-printed it—we
+        look for any check symbol (X, ✓, etc.) anywhere in the line.
+        """
+        low = text.lower()
+
+        print("Extracted : ", low)
+        # 1) Try fuzzy‐match 'case' + up to 2 garbage chars, then get the mark right after it
+        m = re.search(r'cas\w{0,2}\s*([^\s])', text, flags=re.IGNORECASE)
+        if m:
+            mark = m.group(1)
+            mu = mark.upper()
+            if mu in ('X', 'Y', 'T', 'V') or mark in ('✓', '✔', '\/'):
+                return True
+            if mu in ('O', '0') or mark in ('□', '☐'):
+                return False
+
+        if "case " not in text:
+            return True
+
+        # 3) If we see an explicit “unchecked” word, treat as False
+        if 'unchecked' in low:
+            return False
+
+        # 4) Default: unchecked
+        return False
 
     def process_selected_boxe(self, zone):
         """
@@ -121,6 +154,10 @@ class Recognition_service:
 
         for zone in zones_list:
             extracted_element = self.process_selected_boxe(zone)
+
+            if extracted_element == "":
+                continue
+
             results[zone.libelle] = {}
 
             for champ in self.get_champs_list_from_zone(zone.id):
@@ -130,8 +167,10 @@ class Recognition_service:
                 elif champ.type_champs_id == 7:
                     find = self.has_handwrittenDate(zone.coordonnees, zone.page)
                     results[zone.libelle][champ.nom] = find[0]
-                    results[zone.libelle]["Confiance"] = self.confidence_label(find[1])
-                    results[zone.libelle]["Pourcentage"] = f"{find[1] * 100:.1f} %" if find[1] is not None else ""
+                    results[zone.libelle]["Confiance date"] = self.confidence_label(find[1])
+                    results[zone.libelle]["Pourcentage date"] = f"{find[1] * 100:.1f} %" if find[1] is not None else ""
+                elif champ.type_champs_id == 8:
+                    results[zone.libelle][champ.nom] = self.extract_case_check(extracted_element)
                 else:
                     if champ.question:
                         results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question,champ.type_champs_id)
@@ -241,7 +280,7 @@ class Recognition_service:
         :param question: The question to ask.
         :return: Extracted and formatted answer, or an empty string if not valid.
         """
-        formatted_question = f"Quel est {question} ?"
+        formatted_question = f"{question} ?"
 
         results = self.question_answerer(question=formatted_question, context=text)
 
