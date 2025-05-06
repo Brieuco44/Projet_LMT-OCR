@@ -1,3 +1,4 @@
+import re
 from typing import List, Dict, Any
 import json
 
@@ -34,10 +35,10 @@ class Recognition_service:
 
         if isinstance(pdf, str):
             self.pages = convert_from_path(pdf, dpi=dpi)
-            # page 1 size
-            print(self.pages[0].size)
+            self.nbpages = len(self.pages)
         else:
             self.pages = convert_from_bytes(pdf.read(), dpi=dpi)
+            self.nbpages = len(self.pages)
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.selected_boxes = []
         self.db = db
@@ -59,6 +60,10 @@ class Recognition_service:
 
     def extraction(self, box, page):
         # Ajuste l'index de la page (les pages sont indexées à partir de 0)
+        if page > self.nbpages:
+            print("Page not found ", page)
+            return ""
+
         image = self.pages[page - 1]  # Get the page image
 
         # Convertir les coordonnées en format (left, upper, right, lower)
@@ -82,6 +87,34 @@ class Recognition_service:
         """
         return self.extraction(box,page)
 
+    def extract_case_check(self, text: str) -> bool:
+        """
+        Returns True if the box was checked, False otherwise.
+        If 'case' (or its OCR‐variants) is missing—because the mark may have over-printed it—we
+        look for any check symbol (X, ✓, etc.) anywhere in the line.
+        """
+        low = text.lower()
+
+        print("Extracted : ", low)
+        # 1) Try fuzzy‐match 'case' + up to 2 garbage chars, then get the mark right after it
+        m = re.search(r'cas\w{0,2}\s*([^\s])', text, flags=re.IGNORECASE)
+        if m:
+            mark = m.group(1)
+            mu = mark.upper()
+            if mu in ('X', 'Y', 'T', 'V') or mark in ('✓', '✔', '\/'):
+                return True
+            if mu in ('O', '0') or mark in ('□', '☐'):
+                return False
+
+        if "case " not in text:
+            return True
+
+        # 3) If we see an explicit “unchecked” word, treat as False
+        if 'unchecked' in low:
+            return False
+
+        # 4) Default: unchecked
+        return False
 
     def process_selected_boxe(self, zone):
         """
@@ -91,6 +124,23 @@ class Recognition_service:
         :return: Texte extrait de la zone spécifiée.
         """
         return self.extract_text_from_box(zone.coordonnees, zone.page).strip()
+
+    def confidence_label(self, conf):
+        """
+        Map a float in [0,1] to one of four French labels.
+        Returns "" if conf is None.
+        """
+        if conf is None:
+            return ""
+        pct = conf * 100
+        if pct < 25:
+            return "pas confiant"
+        elif pct < 50:
+            return "peu confiant"
+        elif pct < 75:
+            return "confiant"
+        else:
+            return "très confiant"
 
     def process_champs_list(self, zones_list: List['Zone']) -> Dict[str, Dict[Any, Any]]:
         """
@@ -104,16 +154,23 @@ class Recognition_service:
 
         for zone in zones_list:
             extracted_element = self.process_selected_boxe(zone)
+
+            if extracted_element == "":
+                continue
+
             results[zone.libelle] = {}
 
             for champ in self.get_champs_list_from_zone(zone.id):
 
                 if champ.type_champs_id == 4:
-                    results[zone.libelle][champ.nom] = self.has_signature(zone.coordonnees, zone.page)
+                    results[zone.libelle][champ.nom] = self.has_signature(zone.coordonnees, zone.page,extracted_element)
                 elif champ.type_champs_id == 7:
                     find = self.has_handwrittenDate(zone.coordonnees, zone.page)
                     results[zone.libelle][champ.nom] = find[0]
-                    results[zone.libelle]["Confiance"] = f"{find[1] * 100:.1f} %" if find[1] is not None else ""
+                    results[zone.libelle]["Confiance date"] = self.confidence_label(find[1])
+                    results[zone.libelle]["Pourcentage date"] = f"{find[1] * 100:.1f} %" if find[1] is not None else ""
+                elif champ.type_champs_id == 8:
+                    results[zone.libelle][champ.nom] = self.extract_case_check(extracted_element)
                 else:
                     if champ.question:
                         results[zone.libelle][champ.nom] = self.get_answer_from_text(extracted_element, champ.question,champ.type_champs_id)
@@ -138,7 +195,7 @@ class Recognition_service:
         from models.zone import Zone
         champs_list = (
             self.db.session.query(Champs)
-            .join(Zone, Champs.zoneid == zoneid)  # Jointure entre Champs et Zone
+            .join(Zone, Champs.zone_id == zoneid)  # Jointure entre Champs et Zone
             .filter(Zone.type_livrable_id == self.typelivrable)  # Filtrer sur le type_livrable_id
             .all()
         )
@@ -165,6 +222,55 @@ class Recognition_service:
 
         return corrected_letter + corrected_digit
 
+    def has_electronic_signature(self, image: np.ndarray,
+                                 line_min_length: int = 150,
+                                 ocr_height: int      = 40,
+                                 ocr_lang: str        = 'eng') -> bool:
+        """
+        Heuristic method to detect a typed/stamped signature:
+         1. Find long horizontal lines (Hough).
+         2. Crop a small band of pixels immediately above each line.
+         3. OCR that band for any “name‐like” text.
+
+        Returns True if any candidate band yields > 3 chars of OCR text.
+        """
+        # 1) Gray + edge detection
+        gray  = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blur  = cv2.GaussianBlur(gray, (5,5), 0)
+        edges = cv2.Canny(blur, 50, 150)
+
+        # 2) Hough line detection
+        lines = cv2.HoughLinesP(
+            edges,
+            rho=1,
+            theta=np.pi/180,
+            threshold=50,
+            minLineLength=line_min_length,
+            maxLineGap=10
+        )
+        if lines is None:
+            return False
+
+        # 3) Filter for nearly horizontal lines
+        horiz_lines = []
+        for x1, y1, x2, y2 in lines[:,0]:
+            if abs(y2 - y1) <= 3 and (x2 - x1) >= line_min_length:
+                horiz_lines.append((x1, y1, x2, y2))
+        if not horiz_lines:
+            return False
+
+        # 4) OCR above each line
+        for x1, y1, x2, y2 in horiz_lines:
+            # define a little box above the line
+            y_top = max(0, y1 - ocr_height)
+            roi   = gray[y_top:y1, x1:x2]
+            text  = pytesseract.image_to_string(roi, lang=ocr_lang).strip()
+            if len(text) > 3:
+                # (optionally: add regex to match “First Last”)
+                return True
+
+        return False
+
     def get_answer_from_text(self, text, question,type_champs_id):
         """
         Extracts the best possible answer from the given text using a question-answering model.
@@ -174,7 +280,7 @@ class Recognition_service:
         :param question: The question to ask.
         :return: Extracted and formatted answer, or an empty string if not valid.
         """
-        formatted_question = f"Quel est {question} ?"
+        formatted_question = f"{question} ?"
 
         results = self.question_answerer(question=formatted_question, context=text)
 
@@ -185,13 +291,6 @@ class Recognition_service:
         best_result = max(results, key=lambda r: r['score'])
 
         best_answer = best_result['answer'].strip()
-
-        # print(text)
-        # print('------------')
-        # print(formatted_question)
-        # print('------------')
-        # print(best_result)
-        # print('------------')
 
         # Handle multi-line cases (e.g., addresses)
         best_answer = best_answer.replace("\n", " ").replace("|","").strip()
@@ -222,8 +321,7 @@ class Recognition_service:
 
         return champs_data
 
-
-    def has_signature(self, box, page):
+    def has_signature(self, box, page, text):
         # Load the saved model
         loaded_model = YOLO(self.signature_model)
 
@@ -241,18 +339,18 @@ class Recognition_service:
         # Process results to create detections
         detections = sv.Detections.from_ultralytics(results[0])
 
-        # # Annotate the image with detection boxes (for visualization if needed)
-        # box_annotator = sv.BoxAnnotator()
-        # annotated_image = box_annotator.annotate(scene=image, detections=detections)
+        # Annotate the image with detection boxes (for visualization if needed)
+        #box_annotator = sv.BoxAnnotator()
+        #annotated_image = box_annotator.annotate(scene=image, detections=detections)
 
-        # Display the annotated image (optional)
+        # #Display the annotated image (optional)
         # cv2.imshow("Detections", annotated_image)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
         # Check if any detections were made
         if len(detections) == 0:
-            return False
+            return self.has_electronic_signature(image)
         else:
             return True
 

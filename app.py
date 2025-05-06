@@ -58,6 +58,8 @@ def analyseLivrable():
         signature_model="./signature_model.pt"
     )
 
+    rgntn_serv.draw_boxes_on_pdf(output_pdf_path="output_with_boxes1.pdf")
+
 
     return rgntn_serv.process(True)
 
