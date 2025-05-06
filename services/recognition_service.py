@@ -195,7 +195,7 @@ class Recognition_service:
         from models.zone import Zone
         champs_list = (
             self.db.session.query(Champs)
-            .join(Zone, Champs.zoneid == zoneid)  # Jointure entre Champs et Zone
+            .join(Zone, Champs.zone_id == zoneid)  # Jointure entre Champs et Zone
             .filter(Zone.type_livrable_id == self.typelivrable)  # Filtrer sur le type_livrable_id
             .all()
         )

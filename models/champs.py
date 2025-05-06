@@ -10,8 +10,10 @@ class Champs(db.Model):
 
     nom: Mapped[str]
 
-    zoneid = db.Column(db.ForeignKey(Zone.id))
+    zone_id = db.Column(db.ForeignKey(Zone.id))
 
-    question: Mapped[str]  # Numéro de page
+    question: Mapped[str]
+
+    donnee_erp: Mapped[str]
 
     type_champs_id = db.Column(db.ForeignKey(Typechamps.id)) #primary_key=True
