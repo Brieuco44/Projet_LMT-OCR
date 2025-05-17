@@ -191,8 +191,6 @@ class DateOCRProcessor:
 
         result = self.ocr.ocr(np.array(processed_image), cls=False)
 
-        print("OCR Result: ", result)
-
         # Handle no-detection case
         if not result or result[0] is None:
             return "Aucune date trouvée ou date non reconnue", None
@@ -206,8 +204,6 @@ class DateOCRProcessor:
                 return match.group(), confidence
 
             corrected = self.correct_date_text(text)
-
-            #print("Corrected text: ", corrected)
 
             if corrected is None:
                 continue

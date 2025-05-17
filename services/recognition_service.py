@@ -17,8 +17,8 @@ import supervision as sv
 from services.DateOCRProcessor import DateOCRProcessor
 
 
-class Recognition_service:
-    def __init__(self, pdf, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, model_path="../roberta_base_squad2_download",signature_model="../signature_model.pt"):
+class RecognitionService:
+    def __init__(self, pdf, idtypelivrable, db ,tesseract_cmd="/usr/bin/tesseract", dpi=300, qa_model="../roberta_base_squad2_download",signature_model="../signature_model.pt"):
         """
         Initialisation du service de reconnaissance.
 
@@ -43,8 +43,8 @@ class Recognition_service:
         self.selected_boxes = []
         self.db = db
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModelForQuestionAnswering.from_pretrained(model_path).to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(qa_model)
+        self.model = AutoModelForQuestionAnswering.from_pretrained(qa_model).to(self.device)
 
         self.question_answerer = pipeline(
             "question-answering",
@@ -155,12 +155,12 @@ class Recognition_service:
         for zone in zones_list:
             extracted_element = self.process_selected_boxe(zone)
 
-            if extracted_element == "":
-                continue
-
             results[zone.libelle] = {}
 
             for champ in self.get_champs_list_from_zone(zone.id):
+                if extracted_element == "":
+                    results[zone.libelle][champ.nom] = None
+                    continue
 
                 if champ.type_champs_id == 4:
                     results[zone.libelle][champ.nom] = self.has_signature(zone.coordonnees, zone.page,extracted_element)
@@ -201,7 +201,7 @@ class Recognition_service:
         )
         return champs_list
 
-    def correct_nummarche(self,text):
+    def correct_numcommande(self,text):
         # Remove leading/trailing spaces
         text = text.strip()
         # Expecting exactly 10 characters: 6 letters + 4 digits
@@ -221,55 +221,6 @@ class Recognition_service:
         corrected_digit = ''.join('0' if char.upper() == 'O' else char for char in digit_part)
 
         return corrected_letter + corrected_digit
-
-    def has_electronic_signature(self, image: np.ndarray,
-                                 line_min_length: int = 150,
-                                 ocr_height: int      = 40,
-                                 ocr_lang: str        = 'eng') -> bool:
-        """
-        Heuristic method to detect a typed/stamped signature:
-         1. Find long horizontal lines (Hough).
-         2. Crop a small band of pixels immediately above each line.
-         3. OCR that band for any “name‐like” text.
-
-        Returns True if any candidate band yields > 3 chars of OCR text.
-        """
-        # 1) Gray + edge detection
-        gray  = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur  = cv2.GaussianBlur(gray, (5,5), 0)
-        edges = cv2.Canny(blur, 50, 150)
-
-        # 2) Hough line detection
-        lines = cv2.HoughLinesP(
-            edges,
-            rho=1,
-            theta=np.pi/180,
-            threshold=50,
-            minLineLength=line_min_length,
-            maxLineGap=10
-        )
-        if lines is None:
-            return False
-
-        # 3) Filter for nearly horizontal lines
-        horiz_lines = []
-        for x1, y1, x2, y2 in lines[:,0]:
-            if abs(y2 - y1) <= 3 and (x2 - x1) >= line_min_length:
-                horiz_lines.append((x1, y1, x2, y2))
-        if not horiz_lines:
-            return False
-
-        # 4) OCR above each line
-        for x1, y1, x2, y2 in horiz_lines:
-            # define a little box above the line
-            y_top = max(0, y1 - ocr_height)
-            roi   = gray[y_top:y1, x1:x2]
-            text  = pytesseract.image_to_string(roi, lang=ocr_lang).strip()
-            if len(text) > 3:
-                # (optionally: add regex to match “First Last”)
-                return True
-
-        return False
 
     def get_answer_from_text(self, text, question,type_champs_id):
         """
@@ -300,12 +251,24 @@ class Recognition_service:
             best_answer = best_answer.split(':', 1)[1].strip()
 
         if type_champs_id==1:
-            best_answer = self.correct_nummarche(best_answer)
+            best_answer = self.correct_numcommande(best_answer)
+        elif type_champs_id==5 and "au" in best_answer:
+            # Match deux dates au format français (dd/mm/yyyy)
+            match = re.search(r'(\d{2}/\d{2}/\d{4})\s+au\s+(\d{2}/\d{2}/\d{4})', best_answer)
+            if not match:
+                return None
+
+            date_debut_str, date_fin_str = match.groups()
+
+            if "début" in formatted_question.strip().lower():
+                return date_debut_str
+            else:
+                return date_fin_str
 
         return best_answer
 
     def process(self, jsonformat=False):
-        """
+        """ 
         Récupère la liste des champs, exécute l'OCR et retourne un dictionnaire ou un JSON.
 
         :param jsonformat: Si True, renvoie le résultat en format JSON, sinon en dictionnaire.
@@ -340,17 +303,17 @@ class Recognition_service:
         detections = sv.Detections.from_ultralytics(results[0])
 
         # Annotate the image with detection boxes (for visualization if needed)
-        #box_annotator = sv.BoxAnnotator()
-        #annotated_image = box_annotator.annotate(scene=image, detections=detections)
+        # box_annotator = sv.BoxAnnotator()
+        # annotated_image = box_annotator.annotate(scene=image, detections=detections)
 
-        # #Display the annotated image (optional)
+        #Display the annotated image (optional)
         # cv2.imshow("Detections", annotated_image)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
         # Check if any detections were made
         if len(detections) == 0:
-            return self.has_electronic_signature(image)
+            return False
         else:
             return True
 
@@ -376,7 +339,7 @@ class Recognition_service:
         zones_list = self.get_zone_list()
 
         # Organize boxes by page number (pages start at 1)  392, 230, 697, 388 {'x1': 392, 'x2': 230, 'y1': 697, 'y2': 388}
-#        page_boxes = {1: [{'x1': 1269, 'x2': 2324, 'y1': 759, 'y2': 1551 }]}
+        #        page_boxes = {1: [{'x1': 1269, 'x2': 2324, 'y1': 759, 'y2': 1551 }]}
         page_boxes = {}
 
         for zone in zones_list:
