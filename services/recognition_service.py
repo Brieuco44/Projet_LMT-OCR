@@ -201,7 +201,7 @@ class RecognitionService:
         )
         return champs_list
 
-    def correct_nummarche(self,text):
+    def correct_numcommande(self,text):
         # Remove leading/trailing spaces
         text = text.strip()
         # Expecting exactly 10 characters: 6 letters + 4 digits
@@ -251,7 +251,7 @@ class RecognitionService:
             best_answer = best_answer.split(':', 1)[1].strip()
 
         if type_champs_id==1:
-            best_answer = self.correct_nummarche(best_answer)
+            best_answer = self.correct_numcommande(best_answer)
         elif type_champs_id==5 and "au" in best_answer:
             # Match deux dates au format français (dd/mm/yyyy)
             match = re.search(r'(\d{2}/\d{2}/\d{4})\s+au\s+(\d{2}/\d{2}/\d{4})', best_answer)
@@ -303,15 +303,13 @@ class RecognitionService:
         detections = sv.Detections.from_ultralytics(results[0])
 
         # Annotate the image with detection boxes (for visualization if needed)
-        box_annotator = sv.BoxAnnotator()
-        annotated_image = box_annotator.annotate(scene=image, detections=detections)
+        # box_annotator = sv.BoxAnnotator()
+        # annotated_image = box_annotator.annotate(scene=image, detections=detections)
 
         #Display the annotated image (optional)
         # cv2.imshow("Detections", annotated_image)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
-
-        cv2.imwrite('imge'+str(box)+'.jpg', annotated_image)
 
         # Check if any detections were made
         if len(detections) == 0:

@@ -4,8 +4,9 @@ OCR pour le projet LMT avec Catalys
 
 # How to build the docker image
 
-docker build -t ocr_api .
-docker compose up -d
+`docker build -t ocr_api .
+docker compose down -v
+docker compose up -d`
 
 
 
