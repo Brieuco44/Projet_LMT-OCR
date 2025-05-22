@@ -15,6 +15,7 @@ from ultralytics import YOLO
 import supervision as sv
 
 from services.DateOCRProcessor import DateOCRProcessor
+from services.ElectronicSignature import ElectronicSignature
 
 
 class RecognitionService:
@@ -72,7 +73,7 @@ class RecognitionService:
         # Cropping the image
         cropped = image.crop(crop_box)
 
-        #cropped.save(f"{box}.png")
+        #cropped.save(f"tests/img/{box}.png")
 
         # Extrait le texte de la zone découpée
         return pytesseract.image_to_string(cropped, config=r'--oem 1 --psm 6').strip()
@@ -222,7 +223,7 @@ class RecognitionService:
 
         return corrected_letter + corrected_digit
 
-    def get_answer_from_text(self, text, question,type_champs_id):
+    def get_answer_from_text(self, text, question, type_champs_id):
         """
         Extracts the best possible answer from the given text using a question-answering model.
         Improved post-processing to enforce a confidence threshold, clean punctuation, and normalize the answer.
@@ -293,8 +294,8 @@ class RecognitionService:
         pil_image = self.pages[page - 1].crop(self.box_to_tuples(box))
 
         # Convert the PIL image to a NumPy array for OpenCV (PIL image is in RGB)
-        image = np.array(pil_image)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        image_default = np.array(pil_image)
+        image = cv2.cvtColor(image_default, cv2.COLOR_RGB2BGR)
 
         # Use the loaded model for inference on the cropped image
         results = loaded_model(image)
@@ -313,7 +314,8 @@ class RecognitionService:
 
         # Check if any detections were made
         if len(detections) == 0:
-            return False
+            # Si aucune signature manuscrites alors peut-ètre qu'elle est électronique
+            return ElectronicSignature(ratio=False).is_signature_present(image_default)
         else:
             return True
 
